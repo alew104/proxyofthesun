@@ -54,7 +54,7 @@ int main(int argc, char* argv[]){
     struct sockaddr_storage their_addr; // connector's address information
     socklen_t sin_size;;
     int rv;
-	sem_init(&semaphore,0,1);
+	sem_init(&semaphore, 0, 30);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_UNSPEC;
@@ -110,6 +110,7 @@ int main(int argc, char* argv[]){
 
             // pthread instantiation here
 
+            sem_wait(&semaphore);
             pthread_t tid;
             
             // struct to pass sock info
@@ -285,7 +286,6 @@ void* telnetDownload(void* i){
 		strcpy(request, cmd.c_str());
 
 		// make http request
-		//sem_wait(&semaphore);
 		writeToSocket(remotesock, request, strlen(request));
 
 		// client is info->sock
@@ -302,6 +302,7 @@ void* telnetDownload(void* i){
 		shutdown(remotesock, SHUT_WR);
         shutdown(info->sock, SHUT_WR);
         free(info);
+        sem_post(&semaphore);
         pthread_exit(NULL);
         
 		}
