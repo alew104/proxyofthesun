@@ -101,6 +101,7 @@ int main(int argc, char* argv[]){
 
         while(true) {  // continuously run
             sin_size = sizeof their_addr;
+            sem_wait(&semaphore);
             new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 
             if (new_fd == -1) {
@@ -110,7 +111,6 @@ int main(int argc, char* argv[]){
 
             // pthread instantiation here
 
-            sem_wait(&semaphore);
             pthread_t tid;
             
             // struct to pass sock info
