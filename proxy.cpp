@@ -299,8 +299,8 @@ void* telnetDownload(void* i){
         // write(info->sock, request, strlen(request));
         
         //release resources
-		shutdown(remotesock, SHUT_WR);
-        shutdown(info->sock, SHUT_WR);
+        close(remotesock);
+        close(info->sock);
         free(info);
         sem_post(&semaphore);
         pthread_exit(NULL);
