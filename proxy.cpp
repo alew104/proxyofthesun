@@ -145,29 +145,6 @@ bool stringCompare(string a, string b) {
         return false;
     }
 }
-//parses the client command into a relative uri from proxy to server
-// string parseCommand(string command){
-    // //cout << "parse command" << endl;
-    // string method = command.substr(0, command.find(" "));
-    // command.erase(0, command.find("w"));
-    // string host;
-    // size_t found = command.find(":");
-    // //cout << command << endl;
-    // if (found != string::npos){
-        // host = command.substr(0, command.find(":"));
-    // } else {
-        // host = command.substr(0, command.find("/"));
-    // }
-    // //cout << command << endl;
-    // //cout << host << endl;
-    // command.erase(0, command.find("/"));
-    // string file = command.substr(0, command.find("H"));
-    // string proto = command.erase(0, command.find(" ")+1);
-
-    // string cmd = method + " " + file + proto + 
-    // "Host: " + host + "\r\n" + "Connection: close\r\n\r\n\r\n";
-    // return cmd;
-// }
 
 //writing info from remote to socket
 void writeToSocket(int sockfd, const char* buffer, int bufferLen){
@@ -176,7 +153,9 @@ void writeToSocket(int sockfd, const char* buffer, int bufferLen){
     while (bytesSent < bufferLen){
         if ((sentThisTime = send(sockfd, (void *) (buffer + bytesSent), bufferLen - bytesSent, 0)) < 0){
             perror ("Sending Error: ");
-            exit(-1);
+            //exit(-1);
+            sem_post(&semaphore);
+            pthread_exit(NULL);
         }
         bytesSent = bytesSent + sentThisTime;
     }
@@ -218,6 +197,11 @@ void* telnetDownload(void* i){
     }
     //check for valid request   
     string cmd = command;//parseCommand(command);
+    if (cmd.empty()){
+        close(info->sock);
+        sem_post(&semaphore);
+        pthread_exit(NULL);
+    }
     string firstLine = command.substr(0, command.find("\n"));
     //string validate = cmd.substr(0, cmd.find('/')-1); 
     //if not a get request
@@ -264,16 +248,6 @@ void* telnetDownload(void* i){
             port = "80";
             host = host.substr(0, host.find('/'));
         }
-
-        /*
-        if (firstLine.find(':') != string::npos){
-            host = firstLine.substr(0, firstLine.find(":"));
-            firstLine.erase(0, firstLine.find(":") + 1);
-            port = firstLine.substr(0, firstLine.find("/"));
-        } else {
-            host = firstLine.substr(0, firstLine.find("/"));
-        }
-        */
 
         cout << "host is " << host << endl;
         cout << "port is " << port << endl;
@@ -326,7 +300,9 @@ int connectToRemote(string hostname, string port){
     if ((remoterv = getaddrinfo(hostname.c_str(), port.c_str(), &remotehints, &remoteInfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(remoterv));
         cout << "error on host: " << hostname << " and port " << port << endl;
-		exit(1);
+        //exit(1);
+        sem_post(&semaphore);
+        pthread_exit(NULL);
     }
 
     for (remoteresult = remoteInfo; remoteresult != NULL; remoteresult = remoteresult->ai_next) {
@@ -340,7 +316,9 @@ int connectToRemote(string hostname, string port){
 		if (connect(remotesockfd, remoteresult->ai_addr, remoteresult->ai_addrlen) == -1) {
             perror("Connection error: ");
             cout << "error on host: " << hostname << " and port " << port << endl;
-			close(remotesockfd);
+            close(remotesockfd);
+            sem_post(&semaphore);
+            pthread_exit(NULL);
 			continue;
 		}
 		break;
