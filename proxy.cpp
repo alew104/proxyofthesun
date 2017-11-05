@@ -120,7 +120,7 @@ int main(int argc, char* argv[]){
             // create pthread
             int status = pthread_create(&tid, NULL, telnetDownload, (void*)info);
             if(status){
-                cerr<<"Error creating threads." <<endl;
+                cerr<<"Error creating threads." << endl;
                 close(new_fd);
                 exit(-1);
             }
@@ -162,7 +162,7 @@ void writeToSocket(int sockfd, const char* buffer, int bufferLen){
 }
 //this method connects server info back to the client
 void bridgeServerClient(int clientSock, int remoteSock){
-    const int bufferLen = 2048;
+    const int bufferLen = 8192;
     int bytesRecv;
     char buf[bufferLen];
     while ((bytesRecv = recv(remoteSock, buf, bufferLen, 0)) > 0){
