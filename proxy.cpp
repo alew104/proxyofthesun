@@ -37,7 +37,14 @@ const int BACKLOG = 10;         //max threads
 const string GET = "get";       //string comparison later
 
 struct sockInfo {
-	int sock;
+    int sock;
+    pthread_t tid;
+};
+
+struct twoSockInfo{
+    int remotesock;
+    int clientsock;
+    pthread_t tid;
 };
 
 sem_t semaphore;
@@ -116,6 +123,7 @@ int main(int argc, char* argv[]){
             // struct to pass sock info
             sockInfo *info = new sockInfo;
             info->sock = new_fd;
+            info->tid = tid;
 
             // create pthread
             int status = pthread_create(&tid, NULL, telnetDownload, (void*)info);
@@ -161,14 +169,20 @@ void writeToSocket(int sockfd, const char* buffer, int bufferLen){
     }
 }
 //this method connects server info back to the client
-void bridgeServerClient(int clientSock, int remoteSock){
+void* bridgeServerClient(void* i){
+    twoSockInfo *info;
+    info = (twoSockInfo*)i;
     const int bufferLen = 8192;
     int bytesRecv;
     char buf[bufferLen];
-    while ((bytesRecv = recv(remoteSock, buf, bufferLen, 0)) > 0){
-        writeToSocket(clientSock, buf, bytesRecv); // write to client
+    while ((bytesRecv = recv(info->remotesock, buf, bufferLen, 0)) > 0){
+        writeToSocket(info->clientsock, buf, bytesRecv); // write to client
         memset(buf, 0, sizeof(buf)); // update buffer size
     }
+    close(info->remotesock);
+    close(info->clientsock);
+    pthread_detach(info->tid);
+    pthread_exit(NULL);
 }
 
 //for loop control for receiving 
@@ -188,12 +202,10 @@ void* telnetDownload(void* i){
     string command;             //the command to be parsed
 
     bool isValid = false; // used for string validation and loop breaking
-    cout << "testing for calling telnet once" << endl;
     //control loop
     while (!isValid && recv(info->sock, client_message, 1024, 0) != 0){ 
         command += (client_message);
         isValid = checkIfValid(command);
-		cout<< "looping" << endl;
     }
     //check for valid request   
     string cmd = command;//parseCommand(command);
@@ -218,7 +230,6 @@ void* telnetDownload(void* i){
         string port = "80";
         string host;
         // cause need host for connection
-        //firstLine.erase(0, command.find("/") + 2);
         
         if (command.find("http://") == string::npos){
             // no http
@@ -227,19 +238,17 @@ void* telnetDownload(void* i){
             host = firstLine.erase(0, command.find("/") + 2);
         }
         
-        cout << host << endl;
-
         
         // get port code
         if (host.find(':') != string::npos){
             // if there is a port nubmer
             port = host.substr(host.find(':') + 1, host.find(" ")-1);
-            cout << "port in if branch " << port << endl;
+            //cout << "port in if branch " << port << endl;
             host.erase(host.find(':'), host.length());
-            cout << "host in port branch " << host << endl;
+            //cout << "host in port branch " << host << endl;
         } else {
             host = host.substr(0, host.find('/'));
-            cout << "host in port branch with no port " << host << endl;
+            //cout << "host in port branch with no port " << host << endl;
         }
 
         port = port.substr(0, port.length() - 10);
@@ -249,22 +258,52 @@ void* telnetDownload(void* i){
             host = host.substr(0, host.find('/'));
         }
 
+        /*
         cout << "host is " << host << endl;
         cout << "port is " << port << endl;
         cout << "command is " << endl << cmd << endl;
+        */
+
         // connect to remote
 
-		int remotesock = connectToRemote(host, port);
+		int remotesock = connectToRemote(host, "80");
 
 		char request[1024];             //to not reuse buffer from earlier
 		strcpy(request, cmd.c_str());
 
-		// make http request
-		writeToSocket(remotesock, request, strlen(request));
+        // make http request
+        int bytesSent = 0;
+        int sentThisTime;
+        while (bytesSent < strlen(request)){
+            if ((sentThisTime = send(remotesock, (void *) (request + bytesSent), strlen(request) - bytesSent, 0)) < 0){
+                perror ("Sending Error: ");
+                //exit(-1);
+                sem_post(&semaphore);
+                pthread_exit(NULL);
+            }
+            bytesSent = bytesSent + sentThisTime;
+        }
+
+
+        
+		//writeToSocket(remotesock, request, strlen(request));
 
 		// client is info->sock
-		// remote is remotesock
-        bridgeServerClient(info->sock, remotesock);
+        // remote is remotesock
+        pthread_t tid;
+        twoSockInfo *bridgeInfo = new twoSockInfo;
+        bridgeInfo->remotesock = remotesock;
+        bridgeInfo->clientsock = info->sock;
+        bridgeInfo->tid = tid;
+        int status = pthread_create(&tid, NULL, bridgeServerClient, (void*)bridgeInfo);
+        if(status){
+            cerr<<"Error creating threads." << endl;
+            close(remotesock);
+            close(info->sock);
+            pthread_exit(NULL);
+            //exit(-1);
+        }
+        //bridgeServerClient(info->sock, remotesock);
 		
 		
         // // formatting client side
@@ -273,12 +312,11 @@ void* telnetDownload(void* i){
         // write(info->sock, request, strlen(request));
         
         //release resources
-        close(remotesock);
-        close(info->sock);
-        free(info);
+        //close(remotesock);
+        //close(info->sock);
+        //free(info);
         sem_post(&semaphore);
-        pthread_exit(NULL);
-        
+        pthread_detach(info->tid);
 		}
 	return NULL;
 }
@@ -309,6 +347,7 @@ int connectToRemote(string hostname, string port){
 		if ((remotesockfd = socket(remoteresult->ai_family, remoteresult->ai_socktype, 
 			remoteresult->ai_protocol)) == -1) {
             perror("Socket error: ");
+            sem_post(&semaphore);
             cout << "error on host: " << hostname << " and port " << port << endl;
 			continue;
 		}
@@ -325,10 +364,10 @@ int connectToRemote(string hostname, string port){
     }
     //connecting to remote
     if (remoteresult == NULL){
-		fprintf(stderr, "Proxy failed to connect to remote");
+        fprintf(stderr, "Proxy failed to connect to remote");
+        sem_post(&semaphore);
         return 2;
 	}
-  
     // No longer need list of addresses
     freeaddrinfo(remoteInfo);
   
