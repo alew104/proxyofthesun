@@ -11,29 +11,27 @@ README (this file)
 To Run (cmdline)
 make -f Makefile
 ./proxy <port#>
-	e.g.:	./proxy 16675
+	e.g.:	./proxy 12000
 
-separate terminal
-telnet localhost <port#above>
-	e.g.:	telnet localhost 16675
+open up mozilla firefox
+change proxy settings to
+cs2.seattleu.edu port 12000
 
-GET(some examples):
-GET http://www.cnn.com/ HTTP/1.0	// HTTP/1.0 200 OK
-GET http://www.google.com/ HTTP/1.0	// HTTP/1.0 200 OK
-GET http://www.seattleu.edu/ HTTP/1.0	// 302 Found
+type in url below 
 
+www.washington.edu
+www.lost-world.com/ingen/
+www.pbs.org
 
 
 This program serves to act as a HTTP proxy that will take in HTTP 1.0 get requests and
 parses the requests to send to a remote server wherefter the proxy will redirect 
-output from the remote server back to our client. This program will refuse any non-get
-requests as a internal error message. There is early parts of multithreading in code for part 2.
-Memory management also includes 6 structs, 3 for listening, 3 to talk to remote. 
+output from the remote server back to our client. This program acts as a full blown proxy now and takes in the url submitted to submit to our proxy and we open a thread to send to the remote and another thread to send back to client. 
 
 Some strengths is that as long as user inputs valid uri requests, program should work as intended.
-Weakness includes the string parsing section as it is heavily reliant on user inputting mostly valid requests.
 It is also not too fault tolerant. There is also a while loop for our receiving requests from the client.
-Since we could not control or delimit response from client, we manually broke out of the loop.
+Some heavy elements such as big image files take a long time to load.
+Also if we encounter timeouts from remote servers our proxy cannot handle that properly. 
 
 
 Sunny did some string parsing, validation, readme, general testing and debugging.
